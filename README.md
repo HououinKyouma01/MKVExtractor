@@ -3,6 +3,7 @@
 <div align="center">
   <img src="https://img.shields.io/badge/python-3.9+-blue.svg" alt="Python Version">
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
+  <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Mac%20%7C%20Linux-lightgrey.svg" alt="Platform">
 </div>
 
 
@@ -17,9 +18,12 @@ MKV Extractor is a powerful tool designed primarily for archiving fansubs. It ex
 - 📂 Bulk extraction from multiple MKV files
 - 📑 Extracts chapters, subtitles, and fonts
 - 🎨 Preserves subtitle styles and fonts
-- 📊 Real-time progress tracking
-- ⚙️ Configurable settings
+- 📊 Real-time progress tracking with rich console interface
+- ⚙️ Configurable settings with automatic config file management
 - 📝 Detailed logging
+- 🖥️ Cross-platform support (Windows, Mac, Linux)
+- 🔍 Automatic MKVToolNix detection on Windows
+- 🚀 Optional parallel processing for faster extraction
 
 ## <span style="color: #4a86e8;">🛠️ Installation</span>
 
@@ -29,21 +33,28 @@ MKV Extractor is a powerful tool designed primarily for archiving fansubs. It ex
    git clone https://github.com/yourusername/mkv-extractor.git
    cd mkv-extractor
    ```
-3. Install the required Python modules:
+3. Install the required Python module:
    ```
-   pip install rich configparser
+   pip install rich
    ```
-4. Install MKVToolNix from [here](https://mkvtoolnix.download/).
+4. Install MKVToolNix:
+   - **Windows**: Download and install from [here](https://mkvtoolnix.download/). The script will attempt to find it automatically.
+   - **Mac**: Use Homebrew: `brew install mkvtoolnix`
+   - **Linux**: Use your distribution's package manager, e.g., for Ubuntu:
+     ```
+     sudo apt update
+     sudo apt install mkvtoolnix
+     ```
 
 ## <span style="color: #34a853;">⚙️ Configuration</span>
 
-Create a file named `mkv_extractor_config.ini` in the same directory as the script with the following content:
+The script automatically creates and manages a configuration file `mkv_extractor_config.ini` in the same directory as the script. Here's a sample configuration:
 
 ```ini
 [Paths]
-input_dir = C:\Anime
-output_dir = C:\output
-mkvextract_path = C:\Program Files\MKVToolNix\mkvextract.exe
+input_dir = /path/to/your/anime
+output_dir = /path/to/your/output
+mkvextract_path = /path/to/mkvextract
 
 [Settings]
 use_parallel = false
@@ -54,9 +65,11 @@ max_log_lines = 1000
 - `input_dir`: Directory containing your MKV files
 - `output_dir`: Directory where extracted files will be saved
 - `mkvextract_path`: Path to the mkvextract executable
-- `use_parallel`: Set to `true` for parallel processing (faster but may use more resources or wear HDDs if files are stored on HDD - perfect option for SSDs)
+- `use_parallel`: Set to `true` for parallel processing (faster but may use more resources)
 - `max_workers`: Maximum number of parallel workers (if `use_parallel` is `true`)
 - `max_log_lines`: Maximum number of log lines to keep in memory
+
+Note: On Windows, the script will attempt to find MKVToolNix automatically and update the config file.
 
 ## <span style="color: #ea4335;">🚀 Usage</span>
 
@@ -93,4 +106,18 @@ output_dir/
 │       └── custom_font.ttf
 └── info.txt
 ```
+The script preserves the original directory structure and copies any `info.txt` files found in the source directories.
+
+## <span style="color: #ea4335;">📄 License</span>
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## <span style="color: #fbbc05;">🔧 Troubleshooting</span>
+
+- If you encounter a "command not found" error for mkvextract, ensure it's installed and in your system's PATH.
+- On Mac/Linux, you might need to make the script executable: `chmod +x mkv_extractor.py`
+- If you're having issues with file permissions on Mac/Linux, try running the script with sudo (not recommended for regular use).
+- For Windows users, if the script can't find MKVToolNix automatically, you'll be prompted to enter the path manually.
+
+---
 
