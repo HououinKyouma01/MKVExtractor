@@ -1,4 +1,3 @@
-import os
 import subprocess
 import argparse
 from pathlib import Path
@@ -14,13 +13,67 @@ from rich.text import Text
 import logging
 import concurrent.futures
 import configparser
+import sys
+import os
 
 console = Console()
 
 # Default settings
-DEFAULT_INPUT_DIR = r"C:\Anime"
-DEFAULT_OUTPUT_DIR = r"C:\output"
-DEFAULT_MKVEXTRACT_PATH = r"C:\Program Files\MKVToolNix\mkvextract.exe"
+DEFAULT_INPUT_DIR = str(Path.home() / "Videos")
+DEFAULT_OUTPUT_DIR = str(Path.home() / "Documents" / "MKVExtractor")
+DEFAULT_MKVEXTRACT_PATH = "mkvextract"  # Assume it's in PATH
+
+def find_mkvtoolnix_windows():
+    possible_paths = [
+        Path(os.environ.get('PROGRAMFILES', 'C:\\Program Files')) / 'MKVToolNix',
+        Path(os.environ.get('PROGRAMFILES(X86)', 'C:\\Program Files (x86)')) / 'MKVToolNix'
+    ]
+    
+    for path in possible_paths:
+        mkvextract = path / 'mkvextract.exe'
+        if mkvextract.exists():
+            return str(mkvextract)
+    
+    return None
+
+def load_config():
+    config = configparser.ConfigParser()
+    config_path = Path(__file__).parent / 'mkv_extractor_config.ini'
+    
+    if config_path.exists():
+        config.read(config_path)
+    else:
+        config['Paths'] = {}
+        config['Settings'] = {
+            'use_parallel': 'false',
+            'max_workers': str(os.cpu_count()),
+            'max_log_lines': '1000'
+        }
+    
+    # Check and update mkvextract_path
+    if 'mkvextract_path' not in config['Paths']:
+        if sys.platform == 'win32':
+            windows_path = find_mkvtoolnix_windows()
+            if windows_path:
+                config['Paths']['mkvextract_path'] = windows_path
+            else:
+                console.print("[yellow]MKVToolNix not found in default locations.[/yellow]")
+                mkvextract_path = console.input("Please enter the path to mkvextract.exe: ")
+                config['Paths']['mkvextract_path'] = mkvextract_path
+        else:
+            config['Paths']['mkvextract_path'] = DEFAULT_MKVEXTRACT_PATH
+    
+    # Set default paths if not present
+    if 'input_dir' not in config['Paths']:
+        config['Paths']['input_dir'] = DEFAULT_INPUT_DIR
+    if 'output_dir' not in config['Paths']:
+        config['Paths']['output_dir'] = DEFAULT_OUTPUT_DIR
+    
+    # Write updated config back to file
+    with open(config_path, 'w') as configfile:
+        config.write(configfile)
+    
+    return config
 
 class MKVExtractor:
     def __init__(self, config):
@@ -126,9 +179,9 @@ class MKVExtractor:
 
         # Extract chapters
         if info.get('chapters'):
-            chapter_file = os.path.join(output_dir, 'chapters', f"{Path(file_path).stem}_chapters.xml")
-            os.makedirs(os.path.dirname(chapter_file), exist_ok=True)
-            extract_cmds.extend(['chapters', chapter_file])
+            chapter_file = output_dir / 'chapters' / f"{file_path.stem}_chapters.xml"
+            chapter_file.parent.mkdir(parents=True, exist_ok=True)
+            extract_cmds.extend(['chapters', str(chapter_file)])
             extracted_items.append('Chapters')
 
         # Extract subtitles
@@ -139,8 +192,8 @@ class MKVExtractor:
                 ext = self.get_subtitle_extension(codec, name)
                 track_name = track.get('properties', {}).get('track_name', '')
                 track_name_suffix = f"[{track_name}]" if track_name else ""
-                sub_file = os.path.join(output_dir, 'subs', f"{Path(file_path).stem}_track{track['id']}{track_name_suffix}.{ext}")
-                os.makedirs(os.path.dirname(sub_file), exist_ok=True)
+                sub_file = output_dir / 'subs' / f"{file_path.stem}_track{track['id']}{track_name_suffix}.{ext}"
+                sub_file.parent.mkdir(parents=True, exist_ok=True)
                 extract_cmds.extend(['tracks', f"{track['id']}:{sub_file}"])
                 extracted_items.append(f'Subtitle ({codec}, {ext})')
 
@@ -148,8 +201,8 @@ class MKVExtractor:
         for attachment in info.get('attachments', []):
             mime_type = attachment.get('content_type', '').lower()
             if any(font_type in mime_type for font_type in ['font', 'application/x-truetype-font', 'application/x-font-ttf', 'application/vnd.ms-opentype']):
-                font_file = os.path.join(output_dir, 'fonts', attachment['file_name'])
-                os.makedirs(os.path.dirname(font_file), exist_ok=True)
+                font_file = output_dir / 'fonts' / attachment['file_name']
+                font_file.parent.mkdir(parents=True, exist_ok=True)
                 extract_cmds.extend(['attachments', f"{attachment['id']}:{font_file}"])
                 extracted_items.append(f"Font ({attachment['file_name']})")
 
@@ -182,10 +235,10 @@ class MKVExtractor:
 
     def copy_info_file(self, input_dir, output_dir):
         try:
-            info_file = next(input_dir.glob('info.txt'), None)
+            info_file = next(Path(input_dir).glob('info.txt'), None)
             if info_file:
-                output_dir.mkdir(parents=True, exist_ok=True)  # Ensure output directory exists
-                dest_file = output_dir / info_file.name
+                Path(output_dir).mkdir(parents=True, exist_ok=True)
+                dest_file = Path(output_dir) / info_file.name
                 shutil.copy2(info_file, dest_file)
                 self.log(f"Copied info.txt to {dest_file}")
         except Exception as e:
@@ -253,7 +306,7 @@ class MKVExtractor:
             mkvextract_path = args.mkvextract_path or self.config.get('Paths', 'mkvextract_path', fallback=DEFAULT_MKVEXTRACT_PATH)
             mkvmerge_path = str(Path(mkvextract_path).parent / "mkvmerge")
             
-            if not Path(mkvextract_path).exists():
+            if not shutil.which(mkvextract_path):
                 self.log("Error: mkvextract not found. Please install mkvtoolnix or provide the correct path.")
                 return
             
@@ -272,27 +325,6 @@ class MKVExtractor:
             self.log("MKV Extraction completed")
 
         self.display_results()
-
-def load_config():
-    config = configparser.ConfigParser()
-    config_path = Path(__file__).parent / 'mkv_extractor_config.ini'
-    if config_path.exists():
-        config.read(config_path)
-    else:
-        # Create default config
-        config['Paths'] = {
-            'input_dir': DEFAULT_INPUT_DIR,
-            'output_dir': DEFAULT_OUTPUT_DIR,
-            'mkvextract_path': DEFAULT_MKVEXTRACT_PATH
-        }
-        config['Settings'] = {
-            'use_parallel': 'false',
-            'max_workers': str(os.cpu_count()),
-            'max_log_lines': '1000'
-        }
-        with open(config_path, 'w') as configfile:
-            config.write(configfile)
-    return config
 
 def main():
     config = load_config()
